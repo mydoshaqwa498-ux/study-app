@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تطبيق المذاكرة الذكي</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --text-color: #333;
+            --bg-color: #f4f6f7;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 500px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h1, h2 { color: var(--primary-color); text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, button { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        button { background-color: var(--accent-color); color: white; border: none; cursor: pointer; font-weight: bold; transition: background 0.3s; }
+        button:hover { background-color: #2980b9; }
+        .hidden { display: none; }
+        .welcome-msg { background: #d4edda; color: #155724; padding: 15px; border-radius: 6px; text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 15px; border: 1px solid #c3e6cb; }
+        .status-box { background: #e2e3e5; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
+        #questionArea { font-size: 24px; font-weight: bold; min-height: 150px; display: flex; align-items: center; justify-content: center; text-align: center; border: 2px dashed var(--accent-color); padding: 20px; border-radius: 12px; background: #fff; line-height: 1.6; }
+        .admin-section { border-top: 2px solid var(--primary-color); padding-top: 15px; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>تطبيق المذاكرة الذكي</h1>
+        
+        <div id="welcomeBanner" class="welcome-msg hidden"></div>
+
+        <div id="authSection">
+            <div class="form-group">
+                <label for="email">البريد الإلكتروني:</label>
+                <input type="email" id="email" placeholder="example@mail.com">
+            </div>
+            <div class="form-group">
+                <label for="password">كلمة السر:</label>
+                <input type="password" id="password" placeholder="••••••••">
+            </div>
+            <button onclick="handleAuth(true)">تسجيل دخول</button>
+            <p style="text-align: center; margin-top: 15px;">معندكش حساب؟ <a href="#" onclick="toggleAuthMode(event)">سجل حساب جديد</a></p>
+        </div>
+
+        <div id="mainApp" class="hidden">
+            <div class="status-box">
+                <p>مرحباً بك: <span id="userEmailDisplay"></span></p>
+                <p id="subscriptionStatus"></p>
+                <p id="usageStatus"></p>
+            </div>
+
+            <div class="form-group">
+                <label>صوّر صفحة الكتاب:</label>
+                <input type="file" id="imageInput" accept="image/*" onchange="processImage()">
+            </div>
+
+            <h3>أسئلة المراجعة:</h3>
+            <div id="questionArea">اضغط هنا لتوليد الأسئلة بعد اختيار الصورة</div>
+        </div>
+
+        <div id="adminSection" class="admin-section hidden">
+            <h2>لوحة تحكم المؤسس (ميدو)</h2>
+            <div class="form-group">
+                <label for="adminEmailInput">إيميل المستخدم:</label>
+                <input type="email" id="adminEmailInput" placeholder="user@mail.com">
+            </div>
+            <div class="form-group">
+                <label for="daysInput">عدد أيام الاشتراك:</label>
+                <input type="number" id="daysInput" value="30">
+            </div>
+            <button onclick="grantAccess(false)" style="background-color: #27ae60;">منح اشتراك محدد المدة</button>
+            <button onclick="grantAccess(true)" style="background-color: #f39c12; margin-top: 10px;">ترقية مدى الحياة (VIP)</button>
+            <button onclick=" revokeAccess()" style="background-color: #c0392b; margin-top: 10px;">إلغاء الاشتراك</button>
+        </div>
+    </div>
+
+    <script>
+        let authToken = '';
+        let isRegisterMode = false;
+        let isAdmin = false;
+
+        function toggleAuthMode(e) {
+            e.preventDefault();
+            isRegisterMode = !isRegisterMode;
+            const btn = document.querySelector('#authSection button');
+            const link = document.querySelector('#authSection a');
+            if(isRegisterMode) {
+                btn.innerText = 'إنشاء حساب جديد';
+                link.innerText = 'تسجيل دخول';
+            } else {
+                btn.innerText = 'تسجيل دخول';
+                link.innerText = 'سجل حساب جديد';
+            }
+        }
+
+        async function handleAuth(isAdminLogin = false) {
+            const emailInput = document.getElementById('email').value;
+            const passwordInput = document.getElementById('password').value;
+            
+            if(isAdminLogin && emailInput === 'mido@admin.com') {
+                try {
+                    const res = await fetch('/api/admin/login', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({password: passwordInput})
+                    });
+                    const data = await res.json();
+                    if(res.ok) {
+                        authToken = data.token;
+                        isAdmin = true;
+                        showWelcome('أهلاً بك يا مؤسس التطبيق (ميدو)! تحكمك كامل الآن.');
+                        document.getElementById('welcomeBanner').style.backgroundColor = '#fff3cd';
+                        document.getElementById('welcomeBanner').style.color = '#856404';
+                        document.getElementById('mainApp').classList.remove('hidden');
+                        document.getElementById('authSection').classList.add('hidden');
+                        document.getElementById('adminSection').classList.remove('hidden');
+                        document.getElementById('userEmailDisplay').innerText = 'المؤسس ميدو';
+                        document.getElementById('subscriptionStatus').innerText = 'نوع العضوية: ملك التطبيق (صلاحيات كاملة)';
+                        document.getElementById('usageStatus').innerText = 'الاستخدام اليومي: غير محدود إطلاقاً';
+                        return;
+                    } else {
+                        alert(data.error || 'خطأ في دخول الإداري');
+                    }
+                } catch (err) {
+                    alert('تعذر الاتصال بالسيرفر');
+                }
+            }
+
+            const endpoint = isRegisterMode ? '/api/register' : '/api/login';
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email: emailInput, password: passwordInput})
+                });
+                const data = await res.json();
+                if(res.ok) {
+                    authToken = data.token;
+                    isAdmin = false;
+                    document.getElementById('mainApp').classList.remove('hidden');
+                    document.getElementById('authSection').classList.add('hidden');
+                    checkStatus();
+                } else {
+                    alert(data.error || 'حدث خطأ أثناء الدخول');
+                }
+            } catch(e) {
+                alert('مشكلة في الاتصال بالسيرفر');
+            }
+        }
+
+        async function checkStatus() {
+            try {
+                const res = await fetch('/api/status', {
+                    headers: {'x-token': authToken}
+                });
+                const data = await res.json();
+                if(res.ok) {
+                    document.getElementById('userEmailDisplay').innerText = data.email;
+                    if(data.premium) {
+                        showWelcome('أهلاً بك يا بطل! حسابك مفعل ومميز.');
+                        document.getElementById('subscriptionStatus').innerText = 'نوع العضوية: مشترك مميز (مدفوع)';
+                        document.getElementById('usageStatus').innerText = 'متاح لك عدد لا نهائي من الصفحات!';
+                    } else {
+                        showWelcome('مرحباً بك في تطبيق المذاكرة!');
+                        document.getElementById('subscriptionStatus').innerText = 'نوع العضوية: مجاني';
+                        document.getElementById('usageStatus').innerText = `الصفحات المتبقية لك اليوم: ${data.remaining}`;
+                    }
+                }
+            } catch(e) {
+                console.log('خطأ في جلب البيانات');
+            }
+        }
+
+        function showWelcome(msg) {
+            const banner = document.getElementById('welcomeBanner');
+            banner.innerText = msg;
+            banner.classList.remove('hidden');
+        }
+
+        async function processImage() {
+            const fileInput = document.getElementById('imageInput');
+            if(fileInput.files.length === 0) return;
+
+            if(!isAdmin) {
+                try {
+                    const res = await fetch('/api/use', {
+                        method: 'POST',
+                        headers: {'x-token': authToken}
+                    });
+                    if(!res.ok) {
+                        const data = await res.json();
+                        alert(data.error);
+                        return;
+                    }
+                    checkStatus();
+                } catch(e) {
+                    alert('خطأ في تحديث الاستخدام');
+                    return;
+                }
+            }
+
+            const area = document.getElementById('questionArea');
+            area.innerHTML = 'جاري استخراج النص وتوليد الأسئلة بالذكاء الاصطناعي...';
+            
+            setTimeout(() => {
+                area.innerHTML = '1. ما هي الفكرة الرئيسية للنص المستخرج؟<br><br>2. اشرح المصطلح العلمي المذكور بأسلوبك.';
+            }, 2000);
+        }
+
+        async function grantAccess(isLifetime) {
+            const email = document.getElementById('adminEmailInput').value;
+            const days = document.getElementById('daysInput').value;
+            try {
+                const res = await fetch('/api/admin/grant', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'x-admin-token': authToken},
+                    body: JSON.stringify({email: email, days: days, lifetime: isLifetime})
+                });
+                const data = await res.json();
+                if(res.ok) {
+                    alert('تم تحديث اشتراك المستخدم بنجاح!');
+                } else {
+                    alert(data.error);
+                }
+            } catch(e) {
+                alert('خطأ في الاتصال بالسيرفر');
+            }
+        }
+
+        async function revokeAccess() {
+            const email = document.getElementById('adminEmailInput').value;
+            try {
+                const res = await fetch('/api/admin/revoke', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'x-admin-token': authToken},
+                    body: JSON.stringify({email: email})
+                });
+                const data = await res.json();
+                if(res.ok) {
+                    alert('تم إلغاء الاشتراك وإرجاع المستخدم للباقة المجانية.');
+                } else {
+                    alert(data.error);
+                }
+            } catch(e) {
+                alert('خطأ في الاتصال بالسيرفر');
+            }
+        }
+    </script>
+</body>
+</html>
